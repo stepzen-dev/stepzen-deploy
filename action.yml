@@ -1,0 +1,55 @@
+# Copyright IBM Corp. 2024
+# Made available under the MIT License
+
+name: "Deploy a StepZen GraphQL Schema"
+description: "Deploy a GraphQL schema - endpoint is $folder/$name$tag"
+
+inputs:
+  workspace:
+    description: "StepZen workspace folder containing index.graphql"
+    required: true
+  folder:
+    description: "folder name for endpoint"
+    required: true
+  name:
+    description: "name for endpoint"
+    required: true
+  tag:
+    description: "optional tag to be added to name"
+    required: false
+
+outputs:
+  endpoint:
+    description: "Endpoint, for example, api/test"
+    value: ${{ steps.endpoint.outputs.endpoint }}
+  url:
+    description: "URL for the deployed GraphQL endpoint (HTTP)"
+    value: ${{ steps.endpoint-url.outputs.url }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: "check-login"
+      shell: bash
+      run: |
+        stepzen whoami --account
+    - id: endpoint
+      shell: bash
+      run: |
+        endpoint=${{ inputs.folder }}/${{ inputs.name }}${{ inputs.tag }}
+        echo "endpoint=${endpoint}" >> $GITHUB_OUTPUT
+    - name: "deploy"
+      # retry in case of intermittent failure
+      uses: nick-fields/retry@v3
+      with:
+        timeout_seconds: 20
+        max_attempts: 3
+        retry_wait_seconds: 2
+        shell: bash
+        command: stepzen deploy ${{ steps.endpoint.output.endpoint }} --dir=${{ inputs.dir }}
+    - id: endpoint-url
+      shell: bash
+      run: |
+        domain=$(stepzen whoami --domain)
+        account=$(stepzen whoami --account)
+        echo "url=$(echo https://${account}.${domain}/${{ steps.endpoint.output.endpoint }}/graphql)" >> $GITHUB_OUTPUT
